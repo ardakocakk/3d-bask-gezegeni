@@ -1,0 +1,73 @@
+{
+  "name": "Product",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "\u00dcr\u00fcn ad\u0131"
+    },
+    "description": {
+      "type": "string",
+      "description": "\u00dcr\u00fcn a\u00e7\u0131klamas\u0131"
+    },
+    "price": {
+      "type": "number",
+      "description": "Fiyat (TL)"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "dekorasyon",
+        "fonksiyonel",
+        "oyuncak",
+        "aksesuar",
+        "hobi",
+        "diger"
+      ],
+      "description": "\u00dcr\u00fcn kategorisi"
+    },
+    "image_url": {
+      "type": "string",
+      "description": "\u00dcr\u00fcn g\u00f6rseli URL"
+    },
+    "material": {
+      "type": "string",
+      "enum": [
+        "PLA",
+        "ABS",
+        "PETG",
+        "TPU",
+        "Resin"
+      ],
+      "default": "PLA",
+      "description": "Bask\u0131 malzemesi"
+    },
+    "color": {
+      "type": "string",
+      "description": "Renk se\u00e7ene\u011fi"
+    },
+    "dimensions": {
+      "type": "string",
+      "description": "Boyutlar (cm)"
+    },
+    "weight_grams": {
+      "type": "number",
+      "description": "A\u011f\u0131rl\u0131k (gram)"
+    },
+    "in_stock": {
+      "type": "boolean",
+      "default": true,
+      "description": "Stokta var m\u0131"
+    },
+    "featured": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u00d6ne \u00e7\u0131kan \u00fcr\u00fcn"
+    }
+  },
+  "required": [
+    "name",
+    "price",
+    "category"
+  ]
+}

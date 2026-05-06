@@ -1,0 +1,82 @@
+{
+  "name": "Order",
+  "type": "object",
+  "properties": {
+    "customer_name": {
+      "type": "string",
+      "description": "M\u00fc\u015fteri ad\u0131"
+    },
+    "customer_email": {
+      "type": "string",
+      "description": "M\u00fc\u015fteri e-posta"
+    },
+    "customer_phone": {
+      "type": "string",
+      "description": "M\u00fc\u015fteri telefon"
+    },
+    "customer_address": {
+      "type": "string",
+      "description": "Teslimat adresi"
+    },
+    "items": {
+      "type": "array",
+      "description": "Sipari\u015f kalemleri",
+      "items": {
+        "type": "object",
+        "properties": {
+          "product_id": {
+            "type": "string"
+          },
+          "product_name": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "price": {
+            "type": "number"
+          },
+          "is_custom": {
+            "type": "boolean"
+          },
+          "stl_file_url": {
+            "type": "string"
+          },
+          "material": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "total_amount": {
+      "type": "number",
+      "description": "Toplam tutar (TL)"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "beklemede",
+        "hazirlaniyor",
+        "baskida",
+        "kargoda",
+        "teslim_edildi",
+        "iptal"
+      ],
+      "default": "beklemede",
+      "description": "Sipari\u015f durumu"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Sipari\u015f notlar\u0131"
+    }
+  },
+  "required": [
+    "customer_name",
+    "customer_email",
+    "items",
+    "total_amount"
+  ]
+}
