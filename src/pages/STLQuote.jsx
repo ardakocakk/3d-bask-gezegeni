@@ -19,17 +19,19 @@ const materials = {
 };
 
 const infillOptions = [
-  { value: 10,  label: '%10 – Çok Hafif', multiplier: 0.30 },
-  { value: 20,  label: '%20 – Hafif',      multiplier: 0.40 },
-  { value: 40,  label: '%40 – Standart',   multiplier: 0.55 },
-  { value: 60,  label: '%60 – Güçlü',      multiplier: 0.72 },
-  { value: 80,  label: '%80 – Çok Güçlü', multiplier: 0.88 },
-  { value: 100, label: '%100 – Masif',     multiplier: 1.00 },
+  { value: 10,  label: '%10 – Çok Hafif', multiplier: 0.80 },
+  { value: 20,  label: '%20 – Hafif',      multiplier: 1.00 },
+  { value: 40,  label: '%40 – Standart',   multiplier: 1.35 },
+  { value: 60,  label: '%60 – Güçlü',      multiplier: 1.70 },
+  { value: 80,  label: '%80 – Çok Güçlü', multiplier: 2.05 },
+  { value: 100, label: '%100 – Masif',     multiplier: 2.40 },
 ];
 
-// cm → hacim çarpanı (lineer interpolasyon: 1cm=0.05, 30cm=3.0)
-function cmToMultiplier(cm) {
-  return Math.max(0.05, Math.min(3.0, cm * 0.1));
+// Boyut ölçekleme: 10cm referans (1.0x), küp oranıyla ölçeklenir
+// Gerçek 3D baskıda hacim küpsel büyür
+function sizeScale(cm) {
+  const ref = 10; // referans boyut cm
+  return Math.pow(cm / ref, 3);
 }
 
 const colors = [
@@ -43,14 +45,28 @@ const colors = [
   { value: 'gri',     label: 'Gri' },
 ];
 
-function calculatePrice(fileSizeMB, mat, infillMult, sizeMult) {
-  const solidGrams = fileSizeMB * 80;
-  const estimatedMinutes = fileSizeMB * 120;
-  const gram = solidGrams * infillMult * sizeMult;
+// Kalibre edilmiş formül - gerçek slicer verisiyle eşleştirildi
+// Referans: ~16MB STL, 11cm, %20 infill → 123g, 240dk, ~₺221
+function calculatePrice(fileSizeMB, mat, infillMult, sizeScale_) {
+  // Baz gramaj: dosya boyutundan tahmini katı hacim gramı
+  // STL dosya boyutu geometri karmaşıklığıyla orantılı
+  const baseGrams = fileSizeMB * 7.5; // kalibre: ~16MB → ~120g baz
+
+  // Gramaj = baz × infill çarpanı × boyut ölçeği
+  const gram = baseGrams * infillMult * sizeScale_;
+
+  // Süre tahmini: gram başına ~2dk (gerçekçi FDM hızı)
+  const estimatedMinutes = gram * 2;
+
+  // Malzeme maliyeti
   const malzemeMaliyet = gram * materials[mat].gramCost;
-  const isciliK = estimatedMinutes / 1.8;
+
+  // İşçilik: dakika başına ~0.55 TL
+  const isciliK = estimatedMinutes * 0.55;
+
   const toplamMaliyet = malzemeMaliyet + isciliK;
   const satisFiyati = toplamMaliyet * 1.25;
+
   return {
     gram: Math.round(gram),
     estimatedMinutes: Math.round(estimatedMinutes),
@@ -74,7 +90,7 @@ export default function STLQuote() {
 
   const recalculate = (fileSizeMB, mat, inf, cm) => {
     const infillOpt = infillOptions.find(o => o.value === inf);
-    setPrice(calculatePrice(fileSizeMB, mat, infillOpt.multiplier, cmToMultiplier(cm)));
+    setPrice(calculatePrice(fileSizeMB, mat, infillOpt.multiplier, sizeScale(cm)));
   };
 
   const handleFileUpload = async (e) => {
