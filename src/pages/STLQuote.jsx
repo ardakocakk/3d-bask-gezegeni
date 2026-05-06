@@ -1,32 +1,76 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Upload, FileUp, CheckCircle, ShoppingCart, Info, Layers3 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { addCustomToCart } from '@/lib/cartUtils';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const materialPrices = {
-  PLA: { perGram: 0.8, name: 'PLA', desc: 'Ekonomik, çevre dostu' },
-  ABS: { perGram: 1.0, name: 'ABS', desc: 'Dayanıklı, ısıya dirençli' },
-  PETG: { perGram: 1.2, name: 'PETG', desc: 'Güçlü, esnek' },
-  TPU: { perGram: 1.5, name: 'TPU', desc: 'Esnek, kauçuk benzeri' },
-  Resin: { perGram: 2.5, name: 'Resin', desc: 'Yüksek detay, pürüzsüz' }
+// Malzeme maliyeti ₺/gram (hammadde fiyatı)
+const materials = {
+  PLA:  { gramCost: 0.7, name: 'PLA',  desc: 'Ekonomik, çevre dostu' },
+  PETG: { gramCost: 0.6, name: 'PETG', desc: 'Güçlü, esnek' },
+  ABS:  { gramCost: 0.8, name: 'ABS',  desc: 'Dayanıklı, ısıya dirençli' },
+  TPU:  { gramCost: 1.1, name: 'TPU',  desc: 'Esnek, kauçuk benzeri' },
+  Resin:{ gramCost: 1.8, name: 'Resin',desc: 'Yüksek detay, pürüzsüz' },
 };
 
-const colors = [
-  { value: 'beyaz', label: 'Beyaz' },
-  { value: 'siyah', label: 'Siyah' },
-  { value: 'kirmizi', label: 'Kırmızı' },
-  { value: 'mavi', label: 'Mavi' },
-  { value: 'yesil', label: 'Yeşil' },
-  { value: 'sari', label: 'Sarı' },
-  { value: 'turuncu', label: 'Turuncu' },
-  { value: 'gri', label: 'Gri' },
+// Doluluk oranları → gramaj çarpanı
+const infillOptions = [
+  { value: 10, label: '%10 – Çok Hafif', multiplier: 0.30 },
+  { value: 20, label: '%20 – Hafif',      multiplier: 0.40 },
+  { value: 40, label: '%40 – Standart',   multiplier: 0.55 },
+  { value: 60, label: '%60 – Güçlü',      multiplier: 0.72 },
+  { value: 80, label: '%80 – Çok Güçlü', multiplier: 0.88 },
+  { value: 100,label: '%100 – Masif',     multiplier: 1.00 },
 ];
+
+const colors = [
+  { value: 'beyaz',   label: 'Beyaz' },
+  { value: 'siyah',   label: 'Siyah' },
+  { value: 'kirmizi', label: 'Kırmızı' },
+  { value: 'mavi',    label: 'Mavi' },
+  { value: 'yesil',   label: 'Yeşil' },
+  { value: 'sari',    label: 'Sarı' },
+  { value: 'turuncu', label: 'Turuncu' },
+  { value: 'gri',     label: 'Gri' },
+];
+
+// Dosya boyutundan tahmini dakika ve solid gram üretir
+function estimateFromSize(fileSizeMB) {
+  // 1 MB ≈ 120 dakika baskı, 1 MB ≈ 80g solid gram (ham tahmin)
+  const estimatedMinutes = fileSizeMB * 120;
+  const solidGrams = fileSizeMB * 80;
+  return { estimatedMinutes, solidGrams };
+}
+
+/**
+ * Fiyat formülü:
+ *   gram         = solidGrams * infillMultiplier
+ *   malzeme_maliyet = gram * gramCost
+ *   iscilik_maliyet = dakika / 1.8
+ *   toplam_maliyet  = malzeme_maliyet + iscilik_maliyet
+ *   satis_fiyati    = toplam_maliyet * 1.25  (%25 kâr)
+ */
+function calculatePrice(fileSizeMB, mat, infillMultiplier) {
+  const { estimatedMinutes, solidGrams } = estimateFromSize(fileSizeMB);
+  const gram = solidGrams * infillMultiplier;
+  const malzemeMaliyet = gram * materials[mat].gramCost;
+  const isciliK = estimatedMinutes / 1.8;
+  const toplamMaliyet = malzemeMaliyet + isciliK;
+  const satisFiyati = toplamMaliyet * 1.25;
+
+  return {
+    gram: Math.round(gram),
+    estimatedMinutes: Math.round(estimatedMinutes),
+    malzemeMaliyet: Math.round(malzemeMaliyet * 100) / 100,
+    isciliK: Math.round(isciliK * 100) / 100,
+    toplamMaliyet: Math.round(toplamMaliyet * 100) / 100,
+    total: Math.max(Math.round(satisFiyati * 100) / 100, 30),
+  };
+}
 
 export default function STLQuote() {
   const [file, setFile] = useState(null);
@@ -34,20 +78,13 @@ export default function STLQuote() {
   const [uploading, setUploading] = useState(false);
   const [material, setMaterial] = useState('PLA');
   const [color, setColor] = useState('beyaz');
+  const [infill, setInfill] = useState(20);
   const [price, setPrice] = useState(null);
   const [addedToCart, setAddedToCart] = useState(false);
 
-  const calculatePrice = (fileSizeMB, mat) => {
-    const estimatedGrams = fileSizeMB * 15;
-    const baseCost = estimatedGrams * materialPrices[mat].perGram;
-    const laborCost = 25;
-    const total = Math.max(baseCost + laborCost, 35);
-    return {
-      total: Math.round(total * 100) / 100,
-      estimatedGrams: Math.round(estimatedGrams),
-      materialCost: Math.round(baseCost * 100) / 100,
-      laborCost
-    };
+  const recalculate = (fileSizeMB, mat, inf) => {
+    const infillOpt = infillOptions.find(o => o.value === inf);
+    setPrice(calculatePrice(fileSizeMB, mat, infillOpt.multiplier));
   };
 
   const handleFileUpload = async (e) => {
@@ -65,19 +102,21 @@ export default function STLQuote() {
 
     const { file_url } = await base44.integrations.Core.UploadFile({ file: selectedFile });
     setFileUrl(file_url);
-    
+
     const fileSizeMB = selectedFile.size / (1024 * 1024);
-    const priceData = calculatePrice(fileSizeMB, material);
-    setPrice(priceData);
+    recalculate(fileSizeMB, material, infill);
     setUploading(false);
   };
 
   const handleMaterialChange = (mat) => {
     setMaterial(mat);
-    if (file) {
-      const fileSizeMB = file.size / (1024 * 1024);
-      setPrice(calculatePrice(fileSizeMB, mat));
-    }
+    if (file) recalculate(file.size / (1024 * 1024), mat, infill);
+  };
+
+  const handleInfillChange = (val) => {
+    const num = Number(val);
+    setInfill(num);
+    if (file) recalculate(file.size / (1024 * 1024), material, num);
   };
 
   const handleAddToCart = () => {
@@ -103,20 +142,15 @@ export default function STLQuote() {
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
         {/* Upload & Options */}
         <div className="lg:col-span-3 space-y-6">
+
           {/* File Upload */}
           <Card className="p-6 border-border/50">
             <h2 className="font-heading font-semibold mb-4 flex items-center gap-2">
               <FileUp className="w-4 h-4 text-primary" />
               Dosya Yükleme
             </h2>
-
             <label className="flex flex-col items-center justify-center w-full h-44 border-2 border-dashed border-border/50 rounded-xl cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-all duration-300">
-              <input
-                type="file"
-                accept=".stl"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
+              <input type="file" accept=".stl" onChange={handleFileUpload} className="hidden" />
               {uploading ? (
                 <div className="flex flex-col items-center gap-3">
                   <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -126,9 +160,7 @@ export default function STLQuote() {
                 <div className="flex flex-col items-center gap-3">
                   <CheckCircle className="w-8 h-8 text-primary" />
                   <p className="text-sm font-medium">{file.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {(file.size / (1024 * 1024)).toFixed(2)} MB
-                  </p>
+                  <p className="text-xs text-muted-foreground">{(file.size / (1024 * 1024)).toFixed(2)} MB</p>
                   <p className="text-xs text-primary">Başka dosya seçmek için tıklayın</p>
                 </div>
               ) : (
@@ -143,16 +175,17 @@ export default function STLQuote() {
 
           {/* Options */}
           <Card className="p-6 border-border/50">
-            <h2 className="font-heading font-semibold mb-4 flex items-center gap-2">
+            <h2 className="font-heading font-semibold mb-5 flex items-center gap-2">
               <Layers3 className="w-4 h-4 text-primary" />
               Baskı Seçenekleri
             </h2>
 
-            <div className="space-y-4">
+            <div className="space-y-5">
+              {/* Material */}
               <div>
-                <label className="text-sm font-medium mb-2 block">Malzeme</label>
+                <label className="text-sm font-medium mb-2.5 block">Malzeme</label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {Object.entries(materialPrices).map(([key, val]) => (
+                  {Object.entries(materials).map(([key, val]) => (
                     <button
                       key={key}
                       onClick={() => handleMaterialChange(key)}
@@ -164,12 +197,41 @@ export default function STLQuote() {
                     >
                       <p className="text-sm font-medium">{val.name}</p>
                       <p className="text-xs text-muted-foreground">{val.desc}</p>
-                      <p className="text-xs text-primary mt-1">₺{val.perGram}/g</p>
+                      <p className="text-xs text-primary mt-1">₺{val.gramCost}/g</p>
                     </button>
                   ))}
                 </div>
               </div>
 
+              {/* Infill */}
+              <div>
+                <label className="text-sm font-medium mb-2.5 block">
+                  Doluluk Oranı
+                  <span className="text-muted-foreground font-normal ml-2 text-xs">(gramajı ve sağlamlığı etkiler)</span>
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {infillOptions.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => handleInfillChange(opt.value)}
+                      className={`p-3 rounded-xl border text-left transition-all duration-200 ${
+                        infill === opt.value
+                          ? 'border-accent bg-accent/10'
+                          : 'border-border/50 hover:border-accent/30'
+                      }`}
+                    >
+                      <p className={`text-sm font-semibold ${infill === opt.value ? 'text-accent' : ''}`}>
+                        %{opt.value}
+                      </p>
+                      <p className="text-xs text-muted-foreground leading-tight mt-0.5">
+                        {opt.label.split('–')[1].trim()}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Color */}
               <div>
                 <label className="text-sm font-medium mb-2 block">Renk</label>
                 <Select value={color} onValueChange={setColor}>
@@ -193,30 +255,48 @@ export default function STLQuote() {
             <AnimatePresence mode="wait">
               {price ? (
                 <motion.div
+                  key="price"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                 >
                   <Card className="p-6 border-primary/20 bg-gradient-to-b from-primary/5 to-transparent">
-                    <h2 className="font-heading font-semibold mb-6">Fiyat Teklifi</h2>
+                    <h2 className="font-heading font-semibold mb-5">Fiyat Teklifi</h2>
 
                     <div className="space-y-3 mb-6">
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Tahmini Ağırlık</span>
-                        <span>{price.estimatedGrams}g</span>
+                        <span className="text-muted-foreground">Tahmini Gramaj</span>
+                        <span className="font-medium">{price.gram} g</span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Malzeme ({material})</span>
-                        <span>₺{price.materialCost}</span>
+                        <span className="text-muted-foreground">Tahmini Baskı Süresi</span>
+                        <span className="font-medium">~{price.estimatedMinutes} dk</span>
+                      </div>
+
+                      <div className="h-px bg-border/50 my-1" />
+
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Malzeme maliyeti</span>
+                        <span>₺{price.malzemeMaliyet.toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">İşçilik</span>
-                        <span>₺{price.laborCost}</span>
+                        <span className="text-muted-foreground">İşçilik (dk÷1.8)</span>
+                        <span>₺{price.isciliK.toFixed(2)}</span>
                       </div>
-                      <div className="h-px bg-border my-2" />
-                      <div className="flex justify-between">
+                      <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>Ara toplam</span>
+                        <span>₺{price.toplamMaliyet.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>Kâr (%25)</span>
+                        <span>₺{(price.total - price.toplamMaliyet).toFixed(2)}</span>
+                      </div>
+
+                      <div className="h-px bg-border my-1" />
+
+                      <div className="flex justify-between items-center">
                         <span className="font-semibold">Toplam</span>
-                        <span className="text-2xl font-heading font-bold text-primary">₺{price.total}</span>
+                        <span className="text-2xl font-heading font-bold text-primary">₺{price.total.toFixed(2)}</span>
                       </div>
                     </div>
 
@@ -226,31 +306,22 @@ export default function STLQuote() {
                       disabled={addedToCart}
                     >
                       {addedToCart ? (
-                        <>
-                          <CheckCircle className="w-4 h-4" />
-                          Sepete Eklendi
-                        </>
+                        <><CheckCircle className="w-4 h-4" /> Sepete Eklendi</>
                       ) : (
-                        <>
-                          <ShoppingCart className="w-4 h-4" />
-                          Sepete Ekle
-                        </>
+                        <><ShoppingCart className="w-4 h-4" /> Sepete Ekle</>
                       )}
                     </Button>
 
                     <div className="flex items-start gap-2 mt-4 p-3 rounded-lg bg-muted/50">
                       <Info className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
                       <p className="text-xs text-muted-foreground leading-relaxed">
-                        Fiyat dosya boyutuna göre tahminidir. Karmaşık modellerde fiyat değişebilir.
+                        Fiyat dosya boyutundan tahminidir. Karmaşık modellerde fark oluşabilir.
                       </p>
                     </div>
                   </Card>
                 </motion.div>
               ) : (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                >
+                <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                   <Card className="p-6 border-border/50">
                     <div className="text-center py-8">
                       <Upload className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" />
