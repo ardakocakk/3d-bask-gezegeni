@@ -156,11 +156,62 @@ export function parseSTLVolume(buffer) {
     z: bbZ * scaleFactor,
   };
 
+  // ── Mesh Kalitesi ───────────────────────────────────────────────────────────
+  const triCount = triangles.length;
+  let qualityScore = 100;
+  let qualityLabel = 'Mükemmel';
+  if (triCount < 100) { qualityScore = 40; qualityLabel = 'Çok Düşük'; }
+  else if (triCount < 500) { qualityScore = 60; qualityLabel = 'Düşük'; }
+  else if (triCount < 2000) { qualityScore = 75; qualityLabel = 'Orta'; }
+  else if (triCount < 10000) { qualityScore = 88; qualityLabel = 'İyi'; }
+  else { qualityScore = 96; qualityLabel = 'Mükemmel'; }
+
+  const meshQuality = { qualityScore, qualityLabel };
+
+  // ── Overhang / Destek Analizi ────────────────────────────────────────────────
+  const OVERHANG_THRESHOLD = -0.3; // Z bileşeni bu değerden küçükse overhang
+  let overhangCount = 0;
+  let overhangAreaMm2 = 0;
+
+  for (const [p1, p2, p3] of triangles) {
+    const ab = sub(p2, p1);
+    const ac = sub(p3, p1);
+    const n = cross(ab, ac);
+    const len = magnitude(n);
+    if (len === 0) continue;
+    const nz = n[2] / len; // normalize Z bileşeni
+    if (nz < OVERHANG_THRESHOLD) {
+      overhangCount++;
+      overhangAreaMm2 += triangleArea(p1, p2, p3);
+    }
+  }
+
+  const overhangRatio = Math.round((overhangCount / triCount) * 100);
+  const needsSupport = overhangRatio > 5;
+  const supportAreaCm2 = Math.round(overhangAreaMm2 / 100 * 10) / 10;
+  let supportComplexity = 'Hafif';
+  if (overhangRatio > 30) supportComplexity = 'Ağır';
+  else if (overhangRatio > 15) supportComplexity = 'Orta';
+
+  const supports = { needsSupport, overhangRatio, overhangCount, supportAreaCm2, supportComplexity };
+
+  // ── Önerilen Baskı Yönü ─────────────────────────────────────────────────────
+  const dims = [
+    { axis: 'X', size: boundingBoxMm.x },
+    { axis: 'Y', size: boundingBoxMm.y },
+    { axis: 'Z', size: boundingBoxMm.z },
+  ];
+  dims.sort((a, b) => a.size - b.size);
+  const suggestedOrientation = `${dims[0].axis} ekseni yukarı (en düz yüzey tabana)`;
+
   return {
     volumeCm3,
     surfaceAreaCm2,
     boundingBoxMm,
-    triangleCount: triangles.length,
+    triangleCount: triCount,
+    meshQuality,
+    supports,
+    suggestedOrientation,
   };
 }
 
@@ -184,6 +235,7 @@ export function slicerEstimate({
   volumeCm3,
   surfaceAreaCm2,
   boundingBoxMm,
+  supports,
   targetMaxCm,
   infillRatio,
   nozzleDiamMm = 0.4,
@@ -230,12 +282,18 @@ export function slicerEstimate({
     scaledVolumeCm3 // hiçbir zaman modelin kendisinden fazla olamaz
   );
 
+  // Destek materyali tahmini (supports varsa bounding box'un ~%8'i kadar)
+  const supportVolCm3 = supports?.needsSupport
+    ? Math.round(scaledVolumeCm3 * (supports.overhangRatio / 100) * 0.15 * 100) / 100
+    : 0;
+
   return {
     scaledVolumeCm3: Math.round(scaledVolumeCm3 * 10) / 10,
     perimeterVolCm3: Math.round(perimeterVolCm3 * 100) / 100,
     infillVolCm3: Math.round(infillVolCm3 * 100) / 100,
     topBottomVolCm3: Math.round(topBottomVolCm3 * 100) / 100,
     totalPlasticCm3: Math.round(totalPlasticCm3 * 100) / 100,
+    supportVolCm3,
     scaledBB,
     scale,
   };
