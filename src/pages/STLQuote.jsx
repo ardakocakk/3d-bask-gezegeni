@@ -9,6 +9,7 @@ import { base44 } from '@/api/base44Client';
 import { addCustomToCart } from '@/lib/cartUtils';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
+import { parseSTLVolume } from '@/lib/stlParser';
 
 const materials = {
   PLA:   { gramCost: 0.70, name: 'PLA',   desc: 'Ekonomik, çevre dostu' },
@@ -18,20 +19,65 @@ const materials = {
   Resin: { gramCost: 1.80, name: 'Resin', desc: 'Yüksek detay, pürüzsüz' },
 };
 
+// infill: gerçek doluluk oranı (shell hariç iç hacmin yüzdesi)
+// FDM'de shell her zaman %100 dolu, bu çarpan sadece iç hacme uygulanır.
+// Shell hacmi toplam hacmin ~%30'u varsayılır.
 const infillOptions = [
-  { value: 10,  label: '%10 – Çok Hafif', multiplier: 0.80 },
-  { value: 20,  label: '%20 – Hafif',      multiplier: 1.00 },
-  { value: 40,  label: '%40 – Standart',   multiplier: 1.35 },
-  { value: 60,  label: '%60 – Güçlü',      multiplier: 1.70 },
-  { value: 80,  label: '%80 – Çok Güçlü', multiplier: 2.05 },
-  { value: 100, label: '%100 – Masif',     multiplier: 2.40 },
+  { value: 10,  label: '%10 – Çok Hafif', infillRatio: 0.10 },
+  { value: 20,  label: '%20 – Hafif',      infillRatio: 0.20 },
+  { value: 40,  label: '%40 – Standart',   infillRatio: 0.40 },
+  { value: 60,  label: '%60 – Güçlü',      infillRatio: 0.60 },
+  { value: 80,  label: '%80 – Çok Güçlü', infillRatio: 0.80 },
+  { value: 100, label: '%100 – Masif',     infillRatio: 1.00 },
 ];
 
-// Boyut ölçekleme: 10cm referans (1.0x), küp oranıyla ölçeklenir
-// Gerçek 3D baskıda hacim küpsel büyür
-function sizeScale(cm) {
-  const ref = 10; // referans boyut cm
-  return Math.pow(cm / ref, 3);
+// Malzeme yoğunlukları (g/cm³)
+const materialDensity = {
+  PLA:   1.24,
+  PETG:  1.27,
+  ABS:   1.04,
+  TPU:   1.21,
+  Resin: 1.10,
+};
+
+const SHELL_FRACTION = 0.30; // toplam hacmin ~%30'u shell (her zaman dolu)
+
+/**
+ * volumeCm3: STL'den okunan gerçek hacim
+ * targetMaxCm: kullanıcının istediği en büyük kenar (cm)
+ * originalMaxMm: STL'nin orijinal en büyük kenarı (mm)
+ */
+function calculatePrice(volumeCm3, originalMaxMm, targetMaxCm, mat, infillRatio) {
+  // Boyut ölçekleme: kullanıcı istediği boyuta göre hacim küpsel ölçeklenir
+  const originalMaxCm = originalMaxMm / 10;
+  const scaleFactor = targetMaxCm / originalMaxCm;
+  const scaledVolumeCm3 = volumeCm3 * Math.pow(scaleFactor, 3);
+
+  // Doluluk hesabı: shell her zaman dolu, iç hacim infill oranında dolu
+  const shellVol = scaledVolumeCm3 * SHELL_FRACTION;
+  const innerVol = scaledVolumeCm3 * (1 - SHELL_FRACTION);
+  const effectiveVolume = shellVol + innerVol * infillRatio;
+
+  const density = materialDensity[mat];
+  const gram = effectiveVolume * density;
+
+  // Süre: FDM ortalama ~2.0 dk/g (gerçekçi)
+  const estimatedMinutes = gram * 2.0;
+
+  const malzemeMaliyet = gram * materials[mat].gramCost;
+  const isciliK = estimatedMinutes * 0.55;
+  const toplamMaliyet = malzemeMaliyet + isciliK;
+  const satisFiyati = toplamMaliyet * 1.25;
+
+  return {
+    gram: Math.round(gram),
+    scaledVolumeCm3: Math.round(scaledVolumeCm3 * 10) / 10,
+    estimatedMinutes: Math.round(estimatedMinutes),
+    malzemeMaliyet: Math.round(malzemeMaliyet * 100) / 100,
+    isciliK: Math.round(isciliK * 100) / 100,
+    toplamMaliyet: Math.round(toplamMaliyet * 100) / 100,
+    total: Math.max(Math.round(satisFiyati * 100) / 100, 30),
+  };
 }
 
 const colors = [
@@ -45,37 +91,7 @@ const colors = [
   { value: 'gri',     label: 'Gri' },
 ];
 
-// Kalibre edilmiş formül - gerçek slicer verisiyle eşleştirildi
-// Referans: ~16MB STL, 11cm, %20 infill → 123g, 240dk, ~₺221
-function calculatePrice(fileSizeMB, mat, infillMult, sizeScale_) {
-  // Baz gramaj: dosya boyutundan tahmini katı hacim gramı
-  // STL dosya boyutu geometri karmaşıklığıyla orantılı
-  const baseGrams = fileSizeMB * 7.5; // kalibre: ~16MB → ~120g baz
 
-  // Gramaj = baz × infill çarpanı × boyut ölçeği
-  const gram = baseGrams * infillMult * sizeScale_;
-
-  // Süre tahmini: gram başına ~2dk (gerçekçi FDM hızı)
-  const estimatedMinutes = gram * 2;
-
-  // Malzeme maliyeti
-  const malzemeMaliyet = gram * materials[mat].gramCost;
-
-  // İşçilik: dakika başına ~0.55 TL
-  const isciliK = estimatedMinutes * 0.55;
-
-  const toplamMaliyet = malzemeMaliyet + isciliK;
-  const satisFiyati = toplamMaliyet * 1.25;
-
-  return {
-    gram: Math.round(gram),
-    estimatedMinutes: Math.round(estimatedMinutes),
-    malzemeMaliyet: Math.round(malzemeMaliyet * 100) / 100,
-    isciliK: Math.round(isciliK * 100) / 100,
-    toplamMaliyet: Math.round(toplamMaliyet * 100) / 100,
-    total: Math.max(Math.round(satisFiyati * 100) / 100, 30),
-  };
-}
 
 export default function STLQuote() {
   const [file, setFile] = useState(null);
@@ -85,12 +101,14 @@ export default function STLQuote() {
   const [color, setColor] = useState('beyaz');
   const [infill, setInfill] = useState(20);
   const [sizeCm, setSizeCm] = useState(10);
+  const [stlData, setStlData] = useState(null); // { volumeCm3, originalMaxMm }
   const [price, setPrice] = useState(null);
   const [addedToCart, setAddedToCart] = useState(false);
 
-  const recalculate = (fileSizeMB, mat, inf, cm) => {
+  const recalculate = (data, mat, inf, cm) => {
+    if (!data) return;
     const infillOpt = infillOptions.find(o => o.value === inf);
-    setPrice(calculatePrice(fileSizeMB, mat, infillOpt.multiplier, sizeScale(cm)));
+    setPrice(calculatePrice(data.volumeCm3, data.originalMaxMm, cm, mat, infillOpt.infillRatio));
   };
 
   const handleFileUpload = async (e) => {
@@ -103,28 +121,40 @@ export default function STLQuote() {
     setFile(selectedFile);
     setUploading(true);
     setAddedToCart(false);
+    setPrice(null);
+
+    // STL'yi parse et (tarayıcıda)
+    const buffer = await selectedFile.arrayBuffer();
+    const { volumeCm3, boundingBoxMm } = parseSTLVolume(buffer);
+    const originalMaxMm = Math.max(boundingBoxMm.x, boundingBoxMm.y, boundingBoxMm.z);
+    const originalMaxCm = Math.round(originalMaxMm / 10);
+    const data = { volumeCm3, originalMaxMm };
+    setStlData(data);
+    setSizeCm(originalMaxCm || 10);
+
+    // Dosyayı sunucuya yükle
     const { file_url } = await base44.integrations.Core.UploadFile({ file: selectedFile });
     setFileUrl(file_url);
-    const fileSizeMB = selectedFile.size / (1024 * 1024);
-    recalculate(fileSizeMB, material, infill, sizeCm);
+
+    recalculate(data, material, infill, originalMaxCm || 10);
     setUploading(false);
   };
 
   const handleMaterialChange = (mat) => {
     setMaterial(mat);
-    if (file) recalculate(file.size / (1024 * 1024), mat, infill, sizeCm);
+    if (stlData) recalculate(stlData, mat, infill, sizeCm);
   };
 
   const handleInfillChange = (val) => {
     const num = Number(val);
     setInfill(num);
-    if (file) recalculate(file.size / (1024 * 1024), material, num, sizeCm);
+    if (stlData) recalculate(stlData, material, num, sizeCm);
   };
 
   const handleSizeChange = (val) => {
     const num = Number(val);
     setSizeCm(num);
-    if (file) recalculate(file.size / (1024 * 1024), material, infill, num);
+    if (stlData) recalculate(stlData, material, infill, num);
   };
 
   const handleAddToCart = () => {
@@ -286,6 +316,10 @@ export default function STLQuote() {
                   <Card className="p-6 border-primary/20 bg-gradient-to-b from-primary/5 to-transparent">
                     <h2 className="font-heading font-semibold mb-5">Fiyat Teklifi</h2>
                     <div className="space-y-3 mb-6">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Model Hacmi</span>
+                        <span className="font-medium">{price.scaledVolumeCm3} cm³</span>
+                      </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Tahmini Gramaj</span>
                         <span className="font-medium">{price.gram} g</span>
