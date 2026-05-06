@@ -9,7 +9,7 @@ import { base44 } from '@/api/base44Client';
 import { addCustomToCart } from '@/lib/cartUtils';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
-import { parseSTLVolume } from '@/lib/stlParser';
+import { parseSTLVolume, slicerEstimate } from '@/lib/stlParser';
 
 const materials = {
   PLA:   { gramCost: 0.70, name: 'PLA',   desc: 'Ekonomik, çevre dostu' },
@@ -19,9 +19,6 @@ const materials = {
   Resin: { gramCost: 1.80, name: 'Resin', desc: 'Yüksek detay, pürüzsüz' },
 };
 
-// infill: gerçek doluluk oranı (shell hariç iç hacmin yüzdesi)
-// FDM'de shell her zaman %100 dolu, bu çarpan sadece iç hacme uygulanır.
-// Shell hacmi toplam hacmin ~%30'u varsayılır.
 const infillOptions = [
   { value: 10,  label: '%10 – Çok Hafif', infillRatio: 0.10 },
   { value: 20,  label: '%20 – Hafif',      infillRatio: 0.20 },
@@ -40,28 +37,19 @@ const materialDensity = {
   Resin: 1.10,
 };
 
-const SHELL_FRACTION = 0.30; // toplam hacmin ~%30'u shell (her zaman dolu)
-
-/**
- * volumeCm3: STL'den okunan gerçek hacim
- * targetMaxCm: kullanıcının istediği en büyük kenar (cm)
- * originalMaxMm: STL'nin orijinal en büyük kenarı (mm)
- */
-function calculatePrice(volumeCm3, originalMaxMm, targetMaxCm, mat, infillRatio) {
-  // Boyut ölçekleme: kullanıcı istediği boyuta göre hacim küpsel ölçeklenir
-  const originalMaxCm = originalMaxMm / 10;
-  const scaleFactor = targetMaxCm / originalMaxCm;
-  const scaledVolumeCm3 = volumeCm3 * Math.pow(scaleFactor, 3);
-
-  // Doluluk hesabı: shell her zaman dolu, iç hacim infill oranında dolu
-  const shellVol = scaledVolumeCm3 * SHELL_FRACTION;
-  const innerVol = scaledVolumeCm3 * (1 - SHELL_FRACTION);
-  const effectiveVolume = shellVol + innerVol * infillRatio;
+function calculatePrice(stlData, targetMaxCm, mat, infillRatio) {
+  const est = slicerEstimate({
+    volumeCm3: stlData.volumeCm3,
+    surfaceAreaCm2: stlData.surfaceAreaCm2,
+    boundingBoxMm: stlData.boundingBoxMm,
+    targetMaxCm,
+    infillRatio,
+  });
 
   const density = materialDensity[mat];
-  const gram = effectiveVolume * density;
+  const gram = est.totalPlasticCm3 * density;
 
-  // Süre: FDM ortalama ~2.0 dk/g (gerçekçi)
+  // Süre: FDM ortalama ~2.0 dk/g
   const estimatedMinutes = gram * 2.0;
 
   const malzemeMaliyet = gram * materials[mat].gramCost;
@@ -71,7 +59,8 @@ function calculatePrice(volumeCm3, originalMaxMm, targetMaxCm, mat, infillRatio)
 
   return {
     gram: Math.round(gram),
-    scaledVolumeCm3: Math.round(scaledVolumeCm3 * 10) / 10,
+    scaledVolumeCm3: est.scaledVolumeCm3,
+    totalPlasticCm3: est.totalPlasticCm3,
     estimatedMinutes: Math.round(estimatedMinutes),
     malzemeMaliyet: Math.round(malzemeMaliyet * 100) / 100,
     isciliK: Math.round(isciliK * 100) / 100,
@@ -101,14 +90,14 @@ export default function STLQuote() {
   const [color, setColor] = useState('beyaz');
   const [infill, setInfill] = useState(20);
   const [sizeCm, setSizeCm] = useState(10);
-  const [stlData, setStlData] = useState(null); // { volumeCm3, originalMaxMm }
+  const [stlData, setStlData] = useState(null); // { volumeCm3, surfaceAreaCm2, boundingBoxMm }
   const [price, setPrice] = useState(null);
   const [addedToCart, setAddedToCart] = useState(false);
 
   const recalculate = (data, mat, inf, cm) => {
     if (!data) return;
     const infillOpt = infillOptions.find(o => o.value === inf);
-    setPrice(calculatePrice(data.volumeCm3, data.originalMaxMm, cm, mat, infillOpt.infillRatio));
+    setPrice(calculatePrice(data, cm, mat, infillOpt.infillRatio));
   };
 
   const handleFileUpload = async (e) => {
@@ -123,14 +112,14 @@ export default function STLQuote() {
     setAddedToCart(false);
     setPrice(null);
 
-    // STL'yi parse et (tarayıcıda)
+    // STL'yi parse et (tarayıcıda) - gerçek hacim + yüzey alanı
     const buffer = await selectedFile.arrayBuffer();
-    const { volumeCm3, boundingBoxMm } = parseSTLVolume(buffer);
+    const { volumeCm3, surfaceAreaCm2, boundingBoxMm } = parseSTLVolume(buffer);
     const originalMaxMm = Math.max(boundingBoxMm.x, boundingBoxMm.y, boundingBoxMm.z);
-    const originalMaxCm = Math.round(originalMaxMm / 10);
-    const data = { volumeCm3, originalMaxMm };
+    const originalMaxCm = Math.max(1, Math.round(originalMaxMm / 10));
+    const data = { volumeCm3, surfaceAreaCm2, boundingBoxMm };
     setStlData(data);
-    setSizeCm(originalMaxCm || 10);
+    setSizeCm(originalMaxCm);
 
     // Dosyayı sunucuya yükle
     const { file_url } = await base44.integrations.Core.UploadFile({ file: selectedFile });
@@ -321,8 +310,12 @@ export default function STLQuote() {
                         <span className="font-medium">{price.scaledVolumeCm3} cm³</span>
                       </div>
                       <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Plastik Hacmi</span>
+                        <span className="font-medium">{price.totalPlasticCm3} cm³</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Tahmini Gramaj</span>
-                        <span className="font-medium">{price.gram} g</span>
+                        <span className="font-medium font-bold text-foreground">{price.gram} g</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Tahmini Baskı Süresi</span>

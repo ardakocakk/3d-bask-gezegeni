@@ -1,99 +1,133 @@
 /**
- * STL dosyasını parse edip gerçek mesh hacmini (cm³) hesaplar.
- * Signed volume (divergence theorem) yöntemi kullanılır.
- * Binary ve ASCII STL desteklenir.
- * STL birimleri genellikle mm'dir → cm³'e çevirmek için /1000
+ * Gelişmiş STL Parser & Slicer Simülatörü
+ * 
+ * Gerçek bir slicer'ın yaptığına yakın hesaplama:
+ * - Signed volume → gerçek model iç hacmi (cm³)
+ * - Yüzey alanı → duvar/tavan/taban plastiği (her zaman %100 dolu)
+ * - Bounding box → boyut tespiti ve ölçekleme
+ * 
+ * FDM Gramaj Formülü (slicer benzeri):
+ *   perimeter_vol  = surface_area × wall_thickness (2 duvar × 0.4mm)
+ *   infill_vol     = (inner_vol) × infill_ratio
+ *   top_bottom_vol = bbox_area × layer_height × top_bottom_layers
+ *   total_vol      = perimeter_vol + infill_vol + top_bottom_vol
+ *   gram           = total_vol × density
  */
 
+// ── Temel geometri yardımcıları ─────────────────────────────────────────────
+
+function cross(a, b) {
+  return [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+  ];
+}
+
+function sub(a, b) {
+  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+}
+
+function magnitude(v) {
+  return Math.sqrt(v[0] ** 2 + v[1] ** 2 + v[2] ** 2);
+}
+
+/** Üçgenin signed hacim katkısı (divergence theorem) */
 function signedVolumeOfTriangle(p1, p2, p3) {
   return (
-    (p1[0] * (p2[1] * p3[2] - p2[2] * p3[1]) -
-     p1[1] * (p2[0] * p3[2] - p2[2] * p3[0]) +
-     p1[2] * (p2[0] * p3[1] - p2[1] * p3[0])) / 6.0
-  );
+    p1[0] * (p2[1] * p3[2] - p2[2] * p3[1]) -
+    p1[1] * (p2[0] * p3[2] - p2[2] * p3[0]) +
+    p1[2] * (p2[0] * p3[1] - p2[1] * p3[0])
+  ) / 6.0;
+}
+
+/** Üçgenin yüzey alanı (mm²) */
+function triangleArea(p1, p2, p3) {
+  const ab = sub(p2, p1);
+  const ac = sub(p3, p1);
+  return magnitude(cross(ab, ac)) / 2.0;
+}
+
+// ── STL Parse ───────────────────────────────────────────────────────────────
+
+function isBinarySTL(buffer) {
+  if (buffer.byteLength < 84) return false;
+  const view = new DataView(buffer);
+  const numTriangles = view.getUint32(80, true);
+  const expectedSize = 84 + numTriangles * 50;
+  // Boyut tam tutuyorsa binary
+  if (buffer.byteLength === expectedSize) return true;
+  // Header "solid " ile başlıyorsa ASCII
+  const header = new Uint8Array(buffer, 0, 6);
+  const headerStr = String.fromCharCode(...header);
+  return !headerStr.startsWith('solid');
 }
 
 function parseBinarySTL(buffer) {
   const view = new DataView(buffer);
   const numTriangles = view.getUint32(80, true);
-  const triangles = [];
+  const triangles = new Array(numTriangles);
 
   for (let i = 0; i < numTriangles; i++) {
-    const offset = 84 + i * 50;
-    // skip normal (12 bytes), read 3 vertices (9 floats)
-    const p1 = [
-      view.getFloat32(offset + 12, true),
-      view.getFloat32(offset + 16, true),
-      view.getFloat32(offset + 20, true),
+    const off = 84 + i * 50;
+    triangles[i] = [
+      [view.getFloat32(off + 12, true), view.getFloat32(off + 16, true), view.getFloat32(off + 20, true)],
+      [view.getFloat32(off + 24, true), view.getFloat32(off + 28, true), view.getFloat32(off + 32, true)],
+      [view.getFloat32(off + 36, true), view.getFloat32(off + 40, true), view.getFloat32(off + 44, true)],
     ];
-    const p2 = [
-      view.getFloat32(offset + 24, true),
-      view.getFloat32(offset + 28, true),
-      view.getFloat32(offset + 32, true),
-    ];
-    const p3 = [
-      view.getFloat32(offset + 36, true),
-      view.getFloat32(offset + 40, true),
-      view.getFloat32(offset + 44, true),
-    ];
-    triangles.push([p1, p2, p3]);
   }
   return triangles;
 }
 
 function parseAsciiSTL(text) {
   const triangles = [];
-  const vertexRegex = /vertex\s+([\d.eE+\-]+)\s+([\d.eE+\-]+)\s+([\d.eE+\-]+)/g;
-  let vertices = [];
-  let match;
-
-  while ((match = vertexRegex.exec(text)) !== null) {
-    vertices.push([parseFloat(match[1]), parseFloat(match[2]), parseFloat(match[3])]);
-    if (vertices.length === 3) {
-      triangles.push([vertices[0], vertices[1], vertices[2]]);
-      vertices = [];
+  const re = /vertex\s+([\d.eE+\-]+)\s+([\d.eE+\-]+)\s+([\d.eE+\-]+)/g;
+  let verts = [];
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    verts.push([parseFloat(m[1]), parseFloat(m[2]), parseFloat(m[3])]);
+    if (verts.length === 3) {
+      triangles.push([verts[0], verts[1], verts[2]]);
+      verts = [];
     }
   }
   return triangles;
 }
 
-function isBinarySTL(buffer) {
-  // ASCII STL starts with "solid"
-  const header = new Uint8Array(buffer, 0, 5);
-  const text = String.fromCharCode(...header);
-  if (text !== 'solid') return true;
-
-  // But some binary files also start with "solid" — check size consistency
-  const view = new DataView(buffer);
-  const numTriangles = view.getUint32(80, true);
-  const expectedSize = 84 + numTriangles * 50;
-  return buffer.byteLength === expectedSize;
-}
+// ── Ana Analiz Fonksiyonu ────────────────────────────────────────────────────
 
 /**
- * Returns { volumeCm3, boundingBoxMm: {x, y, z} }
+ * STL buffer'ını analiz eder.
+ * 
+ * Döner:
+ *   volumeCm3      – gerçek katı model hacmi (cm³)
+ *   surfaceAreaCm2 – toplam yüzey alanı (cm²)
+ *   boundingBoxMm  – { x, y, z } mm cinsinden
+ *   triangleCount  – üçgen sayısı
+ *   unitIsLikelyMm – birim tahmini (mm mi inch mi)
  */
 export function parseSTLVolume(buffer) {
-  let triangles;
-
-  if (isBinarySTL(buffer)) {
-    triangles = parseBinarySTL(buffer);
-  } else {
-    const text = new TextDecoder().decode(buffer);
-    triangles = parseAsciiSTL(text);
+  if (!buffer || buffer.byteLength < 84) {
+    throw new Error('Geçersiz STL dosyası.');
   }
+
+  const triangles = isBinarySTL(buffer)
+    ? parseBinarySTL(buffer)
+    : parseAsciiSTL(new TextDecoder().decode(buffer));
 
   if (triangles.length === 0) {
     throw new Error('STL dosyasında üçgen bulunamadı.');
   }
 
-  // Hacim hesabı (mm³)
   let volumeMm3 = 0;
+  let surfaceAreaMm2 = 0;
   let minX = Infinity, minY = Infinity, minZ = Infinity;
   let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
 
   for (const [p1, p2, p3] of triangles) {
     volumeMm3 += signedVolumeOfTriangle(p1, p2, p3);
+    surfaceAreaMm2 += triangleArea(p1, p2, p3);
+
     for (const p of [p1, p2, p3]) {
       if (p[0] < minX) minX = p[0];
       if (p[1] < minY) minY = p[1];
@@ -104,13 +138,105 @@ export function parseSTLVolume(buffer) {
     }
   }
 
-  const volumeCm3 = Math.abs(volumeMm3) / 1000; // mm³ → cm³
+  const bbX = maxX - minX;
+  const bbY = maxY - minY;
+  const bbZ = maxZ - minZ;
+  const maxDim = Math.max(bbX, bbY, bbZ);
+
+  // Birim tespiti: çoğu STL mm'dir ama bazıları inch (25.4 kat fark)
+  // Eğer en büyük boyut 1000mm'den büyükse muhtemelen inch → mm'ye çevir
+  const scaleFactor = maxDim > 1000 ? 25.4 : 1.0;
+
+  const volumeCm3 = Math.abs(volumeMm3) * Math.pow(scaleFactor, 3) / 1000;
+  const surfaceAreaCm2 = surfaceAreaMm2 * Math.pow(scaleFactor, 2) / 100;
 
   const boundingBoxMm = {
-    x: maxX - minX,
-    y: maxY - minY,
-    z: maxZ - minZ,
+    x: bbX * scaleFactor,
+    y: bbY * scaleFactor,
+    z: bbZ * scaleFactor,
   };
 
-  return { volumeCm3, boundingBoxMm };
+  return {
+    volumeCm3,
+    surfaceAreaCm2,
+    boundingBoxMm,
+    triangleCount: triangles.length,
+  };
+}
+
+// ── Slicer Simülasyonu ───────────────────────────────────────────────────────
+
+/**
+ * Gerçek slicer'a yakın gramaj hesabı.
+ * 
+ * Parametreler:
+ *   volumeCm3      – modelin katı hacmi
+ *   surfaceAreaCm2 – modelin yüzey alanı
+ *   boundingBoxMm  – bounding box
+ *   targetMaxCm    – kullanıcının istediği en büyük kenar (cm)
+ *   infillRatio    – 0.0–1.0
+ *   nozzleDiamMm   – nozul çapı (varsayılan 0.4mm)
+ *   layerHeightMm  – katman yüksekliği (varsayılan 0.2mm)
+ *   wallCount      – duvar sayısı (varsayılan 2)
+ *   topBottomLayers– tavan/taban katman sayısı (varsayılan 4)
+ */
+export function slicerEstimate({
+  volumeCm3,
+  surfaceAreaCm2,
+  boundingBoxMm,
+  targetMaxCm,
+  infillRatio,
+  nozzleDiamMm = 0.4,
+  layerHeightMm = 0.2,
+  wallCount = 2,
+  topBottomLayers = 4,
+}) {
+  const originalMaxMm = Math.max(boundingBoxMm.x, boundingBoxMm.y, boundingBoxMm.z);
+  const targetMaxMm = targetMaxCm * 10;
+  const scale = targetMaxMm / originalMaxMm;
+
+  // Ölçeklenmiş değerler
+  const scaledVolumeCm3 = volumeCm3 * Math.pow(scale, 3);
+  const scaledSurfaceAreaCm2 = surfaceAreaCm2 * Math.pow(scale, 2);
+  const scaledBB = {
+    x: boundingBoxMm.x * scale,
+    y: boundingBoxMm.y * scale,
+    z: boundingBoxMm.z * scale,
+  };
+
+  // ── Duvar (perimeter) hacmi ──────────────────────────────────
+  // Her duvar = extrusion_width ≈ nozzle_diam
+  // Yüzey alanı × duvar kalınlığı
+  const wallThicknessCm = (nozzleDiamMm * wallCount) / 10;
+  const perimeterVolCm3 = scaledSurfaceAreaCm2 * wallThicknessCm;
+
+  // ── Tavan / Taban hacmi ──────────────────────────────────────
+  // XY kesit alanı = bounding box X×Y (yaklaşık ortalama kesit)
+  // Gerçekte modelin kesit alanı değişir; ortalama = hacim / yükseklik
+  const heightCm = scaledBB.z / 10;
+  const avgCrossSectionCm2 = heightCm > 0 ? scaledVolumeCm3 / heightCm : 0;
+  const topBottomThicknessCm = (topBottomLayers * layerHeightMm) / 10;
+  const topBottomVolCm3 = avgCrossSectionCm2 * topBottomThicknessCm * 2; // tavan + taban
+
+  // ── İç hacim (infill) ────────────────────────────────────────
+  // Duvar ve tavan/taban haricindeki iç hacim
+  const shellVolCm3 = perimeterVolCm3 + topBottomVolCm3;
+  const innerVolCm3 = Math.max(0, scaledVolumeCm3 - shellVolCm3);
+  const infillVolCm3 = innerVolCm3 * infillRatio;
+
+  // Toplam plastik hacmi
+  const totalPlasticCm3 = Math.min(
+    perimeterVolCm3 + topBottomVolCm3 + infillVolCm3,
+    scaledVolumeCm3 // hiçbir zaman modelin kendisinden fazla olamaz
+  );
+
+  return {
+    scaledVolumeCm3: Math.round(scaledVolumeCm3 * 10) / 10,
+    perimeterVolCm3: Math.round(perimeterVolCm3 * 100) / 100,
+    infillVolCm3: Math.round(infillVolCm3 * 100) / 100,
+    topBottomVolCm3: Math.round(topBottomVolCm3 * 100) / 100,
+    totalPlasticCm3: Math.round(totalPlasticCm3 * 100) / 100,
+    scaledBB,
+    scale,
+  };
 }
