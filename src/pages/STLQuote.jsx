@@ -27,6 +27,16 @@ const infillOptions = [
   { value: 100,label: '%100 – Masif',     multiplier: 1.00 },
 ];
 
+// Boyut seçenekleri → hacim çarpanı (gramajı etkiler)
+const sizeOptions = [
+  { value: 'xs',  label: 'XS – 3cm\'e kadar',   multiplier: 0.15 },
+  { value: 'sm',  label: 'S – 3–6 cm',            multiplier: 0.35 },
+  { value: 'md',  label: 'M – 6–10 cm',           multiplier: 0.65 },
+  { value: 'lg',  label: 'L – 10–15 cm',          multiplier: 1.00 },
+  { value: 'xl',  label: 'XL – 15–20 cm',         multiplier: 1.60 },
+  { value: 'xxl', label: 'XXL – 20 cm+',          multiplier: 2.40 },
+];
+
 const colors = [
   { value: 'beyaz',   label: 'Beyaz' },
   { value: 'siyah',   label: 'Siyah' },
@@ -79,12 +89,14 @@ export default function STLQuote() {
   const [material, setMaterial] = useState('PLA');
   const [color, setColor] = useState('beyaz');
   const [infill, setInfill] = useState(20);
+  const [size, setSize] = useState('md');
   const [price, setPrice] = useState(null);
   const [addedToCart, setAddedToCart] = useState(false);
 
-  const recalculate = (fileSizeMB, mat, inf) => {
+  const recalculate = (fileSizeMB, mat, inf, sz) => {
     const infillOpt = infillOptions.find(o => o.value === inf);
-    setPrice(calculatePrice(fileSizeMB, mat, infillOpt.multiplier));
+    const sizeOpt = sizeOptions.find(o => o.value === sz);
+    setPrice(calculatePrice(fileSizeMB, mat, infillOpt.multiplier * sizeOpt.multiplier));
   };
 
   const handleFileUpload = async (e) => {
@@ -104,19 +116,24 @@ export default function STLQuote() {
     setFileUrl(file_url);
 
     const fileSizeMB = selectedFile.size / (1024 * 1024);
-    recalculate(fileSizeMB, material, infill);
+    recalculate(fileSizeMB, material, infill, size);
     setUploading(false);
   };
 
   const handleMaterialChange = (mat) => {
     setMaterial(mat);
-    if (file) recalculate(file.size / (1024 * 1024), mat, infill);
+    if (file) recalculate(file.size / (1024 * 1024), mat, infill, size);
   };
 
   const handleInfillChange = (val) => {
     const num = Number(val);
     setInfill(num);
-    if (file) recalculate(file.size / (1024 * 1024), material, num);
+    if (file) recalculate(file.size / (1024 * 1024), material, num, size);
+  };
+
+  const handleSizeChange = (val) => {
+    setSize(val);
+    if (file) recalculate(file.size / (1024 * 1024), material, infill, val);
   };
 
   const handleAddToCart = () => {
@@ -222,6 +239,34 @@ export default function STLQuote() {
                     >
                       <p className={`text-sm font-semibold ${infill === opt.value ? 'text-accent' : ''}`}>
                         %{opt.value}
+                      </p>
+                      <p className="text-xs text-muted-foreground leading-tight mt-0.5">
+                        {opt.label.split('–')[1].trim()}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Size */}
+              <div>
+                <label className="text-sm font-medium mb-2.5 block">
+                  Boyut
+                  <span className="text-muted-foreground font-normal ml-2 text-xs">(modelin en büyük kenarı)</span>
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {sizeOptions.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => handleSizeChange(opt.value)}
+                      className={`p-3 rounded-xl border text-left transition-all duration-200 ${
+                        size === opt.value
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border/50 hover:border-primary/30'
+                      }`}
+                    >
+                      <p className={`text-sm font-semibold ${size === opt.value ? 'text-primary' : ''}`}>
+                        {opt.label.split('–')[0].trim()}
                       </p>
                       <p className="text-xs text-muted-foreground leading-tight mt-0.5">
                         {opt.label.split('–')[1].trim()}
