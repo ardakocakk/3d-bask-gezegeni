@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
-import { Upload, FileUp, CheckCircle, ShoppingCart, Info, Layers3 } from 'lucide-react';
+import { Upload, FileUp, CheckCircle, ShoppingCart, Info, Layers3, Ruler } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
+import { Input } from '@/components/ui/input';
 import { base44 } from '@/api/base44Client';
 import { addCustomToCart } from '@/lib/cartUtils';
 import { toast } from 'sonner';
@@ -25,14 +27,10 @@ const infillOptions = [
   { value: 100, label: '%100 – Masif',     multiplier: 1.00 },
 ];
 
-const sizeOptions = [
-  { value: 'xs',  label: 'XS',  sub: '3 cm\'e kadar',  multiplier: 0.15 },
-  { value: 'sm',  label: 'S',   sub: '3 – 6 cm',       multiplier: 0.35 },
-  { value: 'md',  label: 'M',   sub: '6 – 10 cm',      multiplier: 0.65 },
-  { value: 'lg',  label: 'L',   sub: '10 – 15 cm',     multiplier: 1.00 },
-  { value: 'xl',  label: 'XL',  sub: '15 – 20 cm',     multiplier: 1.60 },
-  { value: 'xxl', label: 'XXL', sub: '20 cm+',         multiplier: 2.40 },
-];
+// cm → hacim çarpanı (lineer interpolasyon: 1cm=0.05, 30cm=3.0)
+function cmToMultiplier(cm) {
+  return Math.max(0.05, Math.min(3.0, cm * 0.1));
+}
 
 const colors = [
   { value: 'beyaz',   label: 'Beyaz' },
@@ -70,14 +68,13 @@ export default function STLQuote() {
   const [material, setMaterial] = useState('PLA');
   const [color, setColor] = useState('beyaz');
   const [infill, setInfill] = useState(20);
-  const [size, setSize] = useState('md');
+  const [sizeCm, setSizeCm] = useState(10);
   const [price, setPrice] = useState(null);
   const [addedToCart, setAddedToCart] = useState(false);
 
-  const recalculate = (fileSizeMB, mat, inf, sz) => {
+  const recalculate = (fileSizeMB, mat, inf, cm) => {
     const infillOpt = infillOptions.find(o => o.value === inf);
-    const sizeOpt = sizeOptions.find(o => o.value === sz);
-    setPrice(calculatePrice(fileSizeMB, mat, infillOpt.multiplier, sizeOpt.multiplier));
+    setPrice(calculatePrice(fileSizeMB, mat, infillOpt.multiplier, cmToMultiplier(cm)));
   };
 
   const handleFileUpload = async (e) => {
@@ -93,24 +90,25 @@ export default function STLQuote() {
     const { file_url } = await base44.integrations.Core.UploadFile({ file: selectedFile });
     setFileUrl(file_url);
     const fileSizeMB = selectedFile.size / (1024 * 1024);
-    recalculate(fileSizeMB, material, infill, size);
+    recalculate(fileSizeMB, material, infill, sizeCm);
     setUploading(false);
   };
 
   const handleMaterialChange = (mat) => {
     setMaterial(mat);
-    if (file) recalculate(file.size / (1024 * 1024), mat, infill, size);
+    if (file) recalculate(file.size / (1024 * 1024), mat, infill, sizeCm);
   };
 
   const handleInfillChange = (val) => {
     const num = Number(val);
     setInfill(num);
-    if (file) recalculate(file.size / (1024 * 1024), material, num, size);
+    if (file) recalculate(file.size / (1024 * 1024), material, num, sizeCm);
   };
 
   const handleSizeChange = (val) => {
-    setSize(val);
-    if (file) recalculate(file.size / (1024 * 1024), material, infill, val);
+    const num = Number(val);
+    setSizeCm(num);
+    if (file) recalculate(file.size / (1024 * 1024), material, infill, num);
   };
 
   const handleAddToCart = () => {
@@ -217,23 +215,31 @@ export default function STLQuote() {
 
               {/* Size */}
               <div>
-                <label className="text-sm font-medium mb-2.5 block">
+                <label className="text-sm font-medium mb-2.5 block flex items-center gap-2">
+                  <Ruler className="w-3.5 h-3.5 text-primary" />
                   Boyut
-                  <span className="text-muted-foreground font-normal ml-2 text-xs">(modelin en büyük kenarı)</span>
+                  <span className="text-muted-foreground font-normal text-xs">(en büyük kenar)</span>
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {sizeOptions.map((opt) => (
-                    <button
-                      key={opt.value}
-                      onClick={() => handleSizeChange(opt.value)}
-                      className={`p-3 rounded-xl border text-left transition-all duration-200 ${
-                        size === opt.value ? 'border-primary bg-primary/10' : 'border-border/50 hover:border-primary/30'
-                      }`}
-                    >
-                      <p className={`text-sm font-semibold ${size === opt.value ? 'text-primary' : ''}`}>{opt.label}</p>
-                      <p className="text-xs text-muted-foreground leading-tight mt-0.5">{opt.sub}</p>
-                    </button>
-                  ))}
+                <div className="flex items-center gap-4">
+                  <Slider
+                    value={[sizeCm]}
+                    onValueChange={(v) => handleSizeChange(v[0])}
+                    min={1}
+                    max={30}
+                    step={1}
+                    className="flex-1"
+                  />
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Input
+                      type="number"
+                      min={1}
+                      max={30}
+                      value={sizeCm}
+                      onChange={(e) => handleSizeChange(e.target.value)}
+                      className="w-16 text-center bg-background"
+                    />
+                    <span className="text-sm text-muted-foreground">cm</span>
+                  </div>
                 </div>
               </div>
 
