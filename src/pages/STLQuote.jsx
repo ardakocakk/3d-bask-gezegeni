@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
-import { Upload, FileUp, CheckCircle, ShoppingCart, Info, Layers3, Ruler } from 'lucide-react';
+import { Upload, FileUp, CheckCircle, ShoppingCart, Info, Layers3, Ruler, AlertTriangle, TriangleAlert, Microscope, RotateCcw } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { base44 } from '@/api/base44Client';
@@ -42,6 +42,7 @@ function calculatePrice(stlData, targetMaxCm, mat, infillRatio) {
     volumeCm3: stlData.volumeCm3,
     surfaceAreaCm2: stlData.surfaceAreaCm2,
     boundingBoxMm: stlData.boundingBoxMm,
+    supports: stlData.supports,
     targetMaxCm,
     infillRatio,
   });
@@ -61,6 +62,7 @@ function calculatePrice(stlData, targetMaxCm, mat, infillRatio) {
     gram: Math.round(gram),
     scaledVolumeCm3: est.scaledVolumeCm3,
     totalPlasticCm3: est.totalPlasticCm3,
+    supportVolCm3: est.supportVolCm3,
     estimatedMinutes: Math.round(estimatedMinutes),
     malzemeMaliyet: Math.round(malzemeMaliyet * 100) / 100,
     isciliK: Math.round(isciliK * 100) / 100,
@@ -90,7 +92,7 @@ export default function STLQuote() {
   const [color, setColor] = useState('beyaz');
   const [infill, setInfill] = useState(20);
   const [sizeCm, setSizeCm] = useState(10);
-  const [stlData, setStlData] = useState(null); // { volumeCm3, surfaceAreaCm2, boundingBoxMm }
+  const [stlData, setStlData] = useState(null); // { volumeCm3, surfaceAreaCm2, boundingBoxMm, supports, meshQuality, suggestedOrientation }
   const [price, setPrice] = useState(null);
   const [addedToCart, setAddedToCart] = useState(false);
 
@@ -112,12 +114,13 @@ export default function STLQuote() {
     setAddedToCart(false);
     setPrice(null);
 
-    // STL'yi parse et (tarayıcıda) - gerçek hacim + yüzey alanı
+    // STL'yi parse et (tarayıcıda) - tam analiz
     const buffer = await selectedFile.arrayBuffer();
-    const { volumeCm3, surfaceAreaCm2, boundingBoxMm } = parseSTLVolume(buffer);
+    const parsed = parseSTLVolume(buffer);
+    const { volumeCm3, surfaceAreaCm2, boundingBoxMm, supports, meshQuality, suggestedOrientation, triangleCount } = parsed;
     const originalMaxMm = Math.max(boundingBoxMm.x, boundingBoxMm.y, boundingBoxMm.z);
     const originalMaxCm = Math.max(1, Math.round(originalMaxMm / 10));
-    const data = { volumeCm3, surfaceAreaCm2, boundingBoxMm };
+    const data = { volumeCm3, surfaceAreaCm2, boundingBoxMm, supports, meshQuality, suggestedOrientation, triangleCount };
     setStlData(data);
     setSizeCm(originalMaxCm);
 
@@ -197,6 +200,81 @@ export default function STLQuote() {
               )}
             </label>
           </Card>
+
+          {/* STL Analiz Raporu */}
+          {stlData && (
+            <Card className="p-6 border-border/50">
+              <h2 className="font-heading font-semibold mb-4 flex items-center gap-2">
+                <Microscope className="w-4 h-4 text-primary" />
+                Model Analizi
+              </h2>
+              <div className="space-y-4">
+                {/* Boyutlar */}
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  {['X', 'Y', 'Z'].map((axis, i) => (
+                    <div key={axis} className="rounded-lg bg-secondary/50 px-3 py-2">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{axis}</p>
+                      <p className="text-sm font-semibold font-heading">
+                        {[stlData.boundingBoxMm.x, stlData.boundingBoxMm.y, stlData.boundingBoxMm.z][i].toFixed(1)} mm
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Temel metrikler */}
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Üçgen Sayısı</span>
+                    <span className="font-medium">{stlData.triangleCount.toLocaleString('tr-TR')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Hacim</span>
+                    <span className="font-medium">{stlData.volumeCm3.toFixed(2)} cm³</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Yüzey Alanı</span>
+                    <span className="font-medium">{stlData.surfaceAreaCm2.toFixed(2)} cm²</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Mesh Kalitesi</span>
+                    <span className={`font-semibold ${
+                      stlData.meshQuality.qualityScore > 90 ? 'text-green-400' :
+                      stlData.meshQuality.qualityScore > 70 ? 'text-yellow-400' : 'text-red-400'
+                    }`}>{stlData.meshQuality.qualityLabel}</span>
+                  </div>
+                </div>
+
+                {/* Destek Analizi */}
+                <div className={`rounded-xl p-3 border flex items-start gap-3 ${
+                  stlData.supports.needsSupport
+                    ? 'border-yellow-500/30 bg-yellow-500/5'
+                    : 'border-green-500/30 bg-green-500/5'
+                }`}>
+                  {stlData.supports.needsSupport
+                    ? <AlertTriangle className="w-4 h-4 text-yellow-400 mt-0.5 shrink-0" />
+                    : <CheckCircle className="w-4 h-4 text-green-400 mt-0.5 shrink-0" />
+                  }
+                  <div className="flex-1">
+                    <p className={`text-sm font-medium ${stlData.supports.needsSupport ? 'text-yellow-300' : 'text-green-300'}`}>
+                      Destek: {stlData.supports.needsSupport ? `Gerekli (${stlData.supports.supportComplexity})` : 'Gerekmiyor'}
+                    </p>
+                    {stlData.supports.needsSupport && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        %{stlData.supports.overhangRatio} overhang · {stlData.supports.overhangCount} yüzey
+                        · {stlData.supports.supportAreaCm2} cm²
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Önerilen Yön */}
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <RotateCcw className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <span>Önerilen baskı yönü: <span className="text-foreground font-medium">{stlData.suggestedOrientation}</span></span>
+                </div>
+              </div>
+            </Card>
+          )}
 
           {/* Options */}
           <Card className="p-6 border-border/50">
@@ -313,6 +391,14 @@ export default function STLQuote() {
                         <span className="text-muted-foreground">Plastik Hacmi</span>
                         <span className="font-medium">{price.totalPlasticCm3} cm³</span>
                       </div>
+                      {price.supportVolCm3 > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3 text-yellow-400" /> Destek Materyali
+                          </span>
+                          <span className="text-yellow-400 font-medium">+{price.supportVolCm3} cm³</span>
+                        </div>
+                      )}
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Tahmini Gramaj</span>
                         <span className="font-medium font-bold text-foreground">{price.gram} g</span>
