@@ -37,7 +37,7 @@ const materialDensity = {
   Resin: 1.10,
 };
 
-function calculatePrice(stlData, targetMaxCm, mat, infillRatio) {
+function calculatePrice(stlData, targetMaxCm, mat, infillRatio, supportMultiplier = 1.0) {
   const est = slicerEstimate({
     volumeCm3: stlData.volumeCm3,
     surfaceAreaCm2: stlData.surfaceAreaCm2,
@@ -47,8 +47,12 @@ function calculatePrice(stlData, targetMaxCm, mat, infillRatio) {
     infillRatio,
   });
 
+  // supportMultiplier: 0 = destek yok, 0.6 = ağaç, 1.0 = normal
+  const effectiveSupportVol = est.supportVolCm3 * supportMultiplier;
+
   const density = materialDensity[mat];
-  const gram = est.totalPlasticCm3 * density;
+  const modelOnlyPlastic = est.totalPlasticCm3 - est.supportVolCm3;
+  const gram = (modelOnlyPlastic + effectiveSupportVol) * density;
 
   // Süre: FDM ortalama ~2.0 dk/g
   const estimatedMinutes = gram * 2.0;
@@ -62,7 +66,7 @@ function calculatePrice(stlData, targetMaxCm, mat, infillRatio) {
     gram: Math.round(gram),
     scaledVolumeCm3: est.scaledVolumeCm3,
     totalPlasticCm3: est.totalPlasticCm3,
-    supportVolCm3: est.supportVolCm3,
+    supportVolCm3: Math.round(effectiveSupportVol * 100) / 100,
     estimatedMinutes: Math.round(estimatedMinutes),
     malzemeMaliyet: Math.round(malzemeMaliyet * 100) / 100,
     isciliK: Math.round(isciliK * 100) / 100,
@@ -70,6 +74,12 @@ function calculatePrice(stlData, targetMaxCm, mat, infillRatio) {
     total: Math.max(Math.round(satisFiyati * 100) / 100, 30),
   };
 }
+
+const supportOptions = [
+  { value: 'none',   label: 'Destek Yok',    desc: 'Desteksiz baskı',          icon: '🚫', multiplier: 0.0 },
+  { value: 'normal', label: 'Normal Destek', desc: 'Standart kafes destek',     icon: '🏗️', multiplier: 1.0 },
+  { value: 'tree',   label: 'Ağaç Destek',   desc: 'Az materyal, kolay sökme', icon: '🌳', multiplier: 0.6 },
+];
 
 const colors = [
   { value: 'beyaz',   label: 'Beyaz' },
@@ -93,13 +103,15 @@ export default function STLQuote() {
   const [infill, setInfill] = useState(20);
   const [sizeCm, setSizeCm] = useState(10);
   const [stlData, setStlData] = useState(null); // { volumeCm3, surfaceAreaCm2, boundingBoxMm, supports, meshQuality, suggestedOrientation }
+  const [supportType, setSupportType] = useState('normal');
   const [price, setPrice] = useState(null);
   const [addedToCart, setAddedToCart] = useState(false);
 
-  const recalculate = (data, mat, inf, cm) => {
+  const recalculate = (data, mat, inf, cm, suppType) => {
     if (!data) return;
     const infillOpt = infillOptions.find(o => o.value === inf);
-    setPrice(calculatePrice(data, cm, mat, infillOpt.infillRatio));
+    const suppOpt = supportOptions.find(o => o.value === suppType);
+    setPrice(calculatePrice(data, cm, mat, infillOpt.infillRatio, suppOpt.multiplier));
   };
 
   const handleFileUpload = async (e) => {
@@ -128,25 +140,30 @@ export default function STLQuote() {
     const { file_url } = await base44.integrations.Core.UploadFile({ file: selectedFile });
     setFileUrl(file_url);
 
-    recalculate(data, material, infill, originalMaxCm || 10);
+    recalculate(data, material, infill, originalMaxCm || 10, supportType);
     setUploading(false);
   };
 
   const handleMaterialChange = (mat) => {
     setMaterial(mat);
-    if (stlData) recalculate(stlData, mat, infill, sizeCm);
+    if (stlData) recalculate(stlData, mat, infill, sizeCm, supportType);
   };
 
   const handleInfillChange = (val) => {
     const num = Number(val);
     setInfill(num);
-    if (stlData) recalculate(stlData, material, num, sizeCm);
+    if (stlData) recalculate(stlData, material, num, sizeCm, supportType);
   };
 
   const handleSizeChange = (val) => {
     const num = Number(val);
     setSizeCm(num);
-    if (stlData) recalculate(stlData, material, infill, num);
+    if (stlData) recalculate(stlData, material, infill, num, supportType);
+  };
+
+  const handleSupportTypeChange = (val) => {
+    setSupportType(val);
+    if (stlData) recalculate(stlData, material, infill, sizeCm, val);
   };
 
   const handleAddToCart = () => {
@@ -355,6 +372,33 @@ export default function STLQuote() {
                   </div>
                 </div>
               </div>
+
+              {/* Support Type */}
+              {stlData && stlData.supports.needsSupport && (
+                <div>
+                  <label className="text-sm font-medium mb-2.5 block flex items-center gap-2">
+                    Destek Tipi
+                    <span className="text-muted-foreground font-normal text-xs">
+                      (overhang %{stlData.supports.overhangRatio})
+                    </span>
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {supportOptions.map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => handleSupportTypeChange(opt.value)}
+                        className={`p-3 rounded-xl border text-left transition-all duration-200 ${
+                          supportType === opt.value ? 'border-yellow-500/60 bg-yellow-500/10' : 'border-border/50 hover:border-yellow-500/30'
+                        }`}
+                      >
+                        <p className="text-base mb-0.5">{opt.icon}</p>
+                        <p className={`text-xs font-semibold ${supportType === opt.value ? 'text-yellow-300' : ''}`}>{opt.label}</p>
+                        <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{opt.desc}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Color */}
               <div>
