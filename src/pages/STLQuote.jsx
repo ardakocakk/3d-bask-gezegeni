@@ -184,7 +184,7 @@ export default function STLQuote() {
     <div 
       className="min-h-screen bg-cover bg-center bg-fixed"
       style={{
-        backgroundImage: `linear-gradient(135deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.45) 50%, rgba(240,240,240,0.5) 100%), url('${bgImage}')`,
+        backgroundImage: `linear-gradient(135deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.15) 50%, rgba(240,240,240,0.2) 100%), url('${bgImage}')`,
         backgroundAttachment: 'fixed'
       }}
     >
