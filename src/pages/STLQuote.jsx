@@ -12,29 +12,29 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { parseSTLVolume, slicerEstimate } from '@/lib/stlParser';
 
 const materials = {
-  PLA:   { gramCost: 0.70, name: 'PLA',   desc: 'Ekonomik, çevre dostu' },
-  PETG:  { gramCost: 0.60, name: 'PETG',  desc: 'Güçlü, esnek' },
-  ABS:   { gramCost: 0.80, name: 'ABS',   desc: 'Dayanıklı, ısıya dirençli' },
-  TPU:   { gramCost: 1.10, name: 'TPU',   desc: 'Esnek, kauçuk benzeri' },
-  Resin: { gramCost: 1.80, name: 'Resin', desc: 'Yüksek detay, pürüzsüz' },
+  PLA: { gramCost: 0.70, name: 'PLA', desc: 'Ekonomik, çevre dostu' },
+  PETG: { gramCost: 0.60, name: 'PETG', desc: 'Güçlü, esnek' },
+  ABS: { gramCost: 0.80, name: 'ABS', desc: 'Dayanıklı, ısıya dirençli' },
+  TPU: { gramCost: 1.10, name: 'TPU', desc: 'Esnek, kauçuk benzeri' },
+  Resin: { gramCost: 1.80, name: 'Resin', desc: 'Yüksek detay, pürüzsüz' }
 };
 
 const infillOptions = [
-  { value: 10,  label: '%10 – Çok Hafif', infillRatio: 0.10 },
-  { value: 20,  label: '%20 – Hafif',      infillRatio: 0.20 },
-  { value: 40,  label: '%40 – Standart',   infillRatio: 0.40 },
-  { value: 60,  label: '%60 – Güçlü',      infillRatio: 0.60 },
-  { value: 80,  label: '%80 – Çok Güçlü', infillRatio: 0.80 },
-  { value: 100, label: '%100 – Masif',     infillRatio: 1.00 },
-];
+{ value: 10, label: '%10 – Çok Hafif', infillRatio: 0.10 },
+{ value: 20, label: '%20 – Hafif', infillRatio: 0.20 },
+{ value: 40, label: '%40 – Standart', infillRatio: 0.40 },
+{ value: 60, label: '%60 – Güçlü', infillRatio: 0.60 },
+{ value: 80, label: '%80 – Çok Güçlü', infillRatio: 0.80 },
+{ value: 100, label: '%100 – Masif', infillRatio: 1.00 }];
+
 
 // Malzeme yoğunlukları (g/cm³)
 const materialDensity = {
-  PLA:   1.24,
-  PETG:  1.27,
-  ABS:   1.04,
-  TPU:   1.21,
-  Resin: 1.10,
+  PLA: 1.24,
+  PETG: 1.27,
+  ABS: 1.04,
+  TPU: 1.21,
+  Resin: 1.10
 };
 
 function calculatePrice(stlData, targetMaxCm, mat, infillRatio, supportMultiplier = 1.0) {
@@ -44,7 +44,7 @@ function calculatePrice(stlData, targetMaxCm, mat, infillRatio, supportMultiplie
     boundingBoxMm: stlData.boundingBoxMm,
     supports: stlData.supports,
     targetMaxCm,
-    infillRatio,
+    infillRatio
   });
 
   // supportMultiplier: 0 = destek yok, 0.6 = ağaç, 1.0 = normal
@@ -71,26 +71,26 @@ function calculatePrice(stlData, targetMaxCm, mat, infillRatio, supportMultiplie
     malzemeMaliyet: Math.round(malzemeMaliyet * 100) / 100,
     isciliK: Math.round(isciliK * 100) / 100,
     toplamMaliyet: Math.round(toplamMaliyet * 100) / 100,
-    total: Math.max(Math.round(satisFiyati * 100) / 100, 30),
+    total: Math.max(Math.round(satisFiyati * 100) / 100, 30)
   };
 }
 
 const supportOptions = [
-  { value: 'none',   label: 'Destek Yok',    desc: 'Desteksiz baskı',          icon: '🚫', multiplier: 0.0 },
-  { value: 'normal', label: 'Normal Destek', desc: 'Standart kafes destek',     icon: '🏗️', multiplier: 1.0 },
-  { value: 'tree',   label: 'Ağaç Destek',   desc: 'Az materyal, kolay sökme', icon: '🌳', multiplier: 0.6 },
-];
+{ value: 'none', label: 'Destek Yok', desc: 'Desteksiz baskı', icon: '🚫', multiplier: 0.0 },
+{ value: 'normal', label: 'Normal Destek', desc: 'Standart kafes destek', icon: '🏗️', multiplier: 1.0 },
+{ value: 'tree', label: 'Ağaç Destek', desc: 'Az materyal, kolay sökme', icon: '🌳', multiplier: 0.6 }];
+
 
 const colors = [
-  { value: 'beyaz',   label: 'Beyaz' },
-  { value: 'siyah',   label: 'Siyah' },
-  { value: 'kirmizi', label: 'Kırmızı' },
-  { value: 'mavi',    label: 'Mavi' },
-  { value: 'yesil',   label: 'Yeşil' },
-  { value: 'sari',    label: 'Sarı' },
-  { value: 'turuncu', label: 'Turuncu' },
-  { value: 'gri',     label: 'Gri' },
-];
+{ value: 'beyaz', label: 'Beyaz' },
+{ value: 'siyah', label: 'Siyah' },
+{ value: 'kirmizi', label: 'Kırmızı' },
+{ value: 'mavi', label: 'Mavi' },
+{ value: 'yesil', label: 'Yeşil' },
+{ value: 'sari', label: 'Sarı' },
+{ value: 'turuncu', label: 'Turuncu' },
+{ value: 'gri', label: 'Gri' }];
+
 
 
 
@@ -111,8 +111,8 @@ export default function STLQuote() {
 
   const recalculate = (data, mat, inf, cm, suppType) => {
     if (!data) return;
-    const infillOpt = infillOptions.find(o => o.value === inf);
-    const suppOpt = supportOptions.find(o => o.value === suppType);
+    const infillOpt = infillOptions.find((o) => o.value === inf);
+    const suppOpt = supportOptions.find((o) => o.value === suppType);
     setPrice(calculatePrice(data, cm, mat, infillOpt.infillRatio, suppOpt.multiplier));
   };
 
@@ -174,23 +174,23 @@ export default function STLQuote() {
       price: price.total,
       stl_file_url: fileUrl,
       material,
-      color,
+      color
     });
     setAddedToCart(true);
     toast.success('Özel baskı sepete eklendi!');
   };
 
   return (
-    <div 
+    <div
       className="min-h-screen bg-cover bg-center bg-fixed"
       style={{
         backgroundImage: `linear-gradient(135deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.15) 50%, rgba(240,240,240,0.2) 100%), url('${bgImage}')`,
         backgroundAttachment: 'fixed'
-      }}
-    >
+      }}>
+      
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="mb-10">
-          <h1 className="font-heading text-3xl sm:text-4xl font-bold mb-2">STL Dosyası Yükle</h1>
+          <h1 className="font-heading text-3xl sm:text-4xl font-bold mb-2 text-[#c63939]">STL Dosyası Yükle</h1>
           <p className="text-muted-foreground">STL dosyanızı yükleyin, anında fiyat teklifi alın</p>
         </div>
 
@@ -205,30 +205,30 @@ export default function STLQuote() {
             </h2>
             <label className="flex flex-col items-center justify-center w-full h-44 border-2 border-dashed border-border/50 rounded-xl cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-all duration-300">
               <input type="file" accept=".stl" onChange={handleFileUpload} className="hidden" />
-              {uploading ? (
+              {uploading ?
                 <div className="flex flex-col items-center gap-3">
                   <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                   <p className="text-sm text-muted-foreground">Dosya yükleniyor...</p>
-                </div>
-              ) : file ? (
+                </div> :
+                file ?
                 <div className="flex flex-col items-center gap-3">
                   <CheckCircle className="w-8 h-8 text-primary" />
                   <p className="text-sm font-medium">{file.name}</p>
                   <p className="text-xs text-muted-foreground">{(file.size / (1024 * 1024)).toFixed(2)} MB</p>
                   <p className="text-xs text-primary">Başka dosya seçmek için tıklayın</p>
-                </div>
-              ) : (
+                </div> :
+
                 <div className="flex flex-col items-center gap-3">
                   <Upload className="w-8 h-8 text-muted-foreground/40" />
                   <p className="text-sm text-muted-foreground">STL dosyanızı buraya sürükleyin veya tıklayın</p>
                   <p className="text-xs text-muted-foreground/60">Maksimum 50MB</p>
                 </div>
-              )}
+                }
             </label>
           </Card>
 
           {/* STL Analiz Raporu */}
-          {stlData && (
+          {stlData &&
             <Card className="p-6 border-border/50">
               <h2 className="font-heading font-semibold mb-4 flex items-center gap-2">
                 <Microscope className="w-4 h-4 text-primary" />
@@ -237,14 +237,14 @@ export default function STLQuote() {
               <div className="space-y-4">
                 {/* Boyutlar */}
                 <div className="grid grid-cols-3 gap-2 text-center">
-                  {['X', 'Y', 'Z'].map((axis, i) => (
-                    <div key={axis} className="rounded-lg bg-secondary/50 px-3 py-2">
+                  {['X', 'Y', 'Z'].map((axis, i) =>
+                  <div key={axis} className="rounded-lg bg-secondary/50 px-3 py-2">
                       <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{axis}</p>
                       <p className="text-sm font-semibold font-heading">
                         {[stlData.boundingBoxMm.x, stlData.boundingBoxMm.y, stlData.boundingBoxMm.z][i].toFixed(1)} mm
                       </p>
                     </div>
-                  ))}
+                  )}
                 </div>
 
                 {/* Temel metrikler */}
@@ -264,32 +264,32 @@ export default function STLQuote() {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Mesh Kalitesi</span>
                     <span className={`font-semibold ${
-                      stlData.meshQuality.qualityScore > 90 ? 'text-green-400' :
-                      stlData.meshQuality.qualityScore > 70 ? 'text-yellow-400' : 'text-red-400'
-                    }`}>{stlData.meshQuality.qualityLabel}</span>
+                    stlData.meshQuality.qualityScore > 90 ? 'text-green-400' :
+                    stlData.meshQuality.qualityScore > 70 ? 'text-yellow-400' : 'text-red-400'}`
+                    }>{stlData.meshQuality.qualityLabel}</span>
                   </div>
                 </div>
 
                 {/* Destek Analizi */}
                 <div className={`rounded-xl p-3 border flex items-start gap-3 ${
-                  stlData.supports.needsSupport
-                    ? 'border-yellow-500/30 bg-yellow-500/5'
-                    : 'border-green-500/30 bg-green-500/5'
-                }`}>
-                  {stlData.supports.needsSupport
-                    ? <AlertTriangle className="w-4 h-4 text-yellow-400 mt-0.5 shrink-0" />
-                    : <CheckCircle className="w-4 h-4 text-green-400 mt-0.5 shrink-0" />
+                stlData.supports.needsSupport ?
+                'border-yellow-500/30 bg-yellow-500/5' :
+                'border-green-500/30 bg-green-500/5'}`
+                }>
+                  {stlData.supports.needsSupport ?
+                  <AlertTriangle className="w-4 h-4 text-yellow-400 mt-0.5 shrink-0" /> :
+                  <CheckCircle className="w-4 h-4 text-green-400 mt-0.5 shrink-0" />
                   }
                   <div className="flex-1">
                     <p className={`text-sm font-medium ${stlData.supports.needsSupport ? 'text-yellow-300' : 'text-green-300'}`}>
                       Destek: {stlData.supports.needsSupport ? `Gerekli (${stlData.supports.supportComplexity})` : 'Gerekmiyor'}
                     </p>
-                    {stlData.supports.needsSupport && (
-                      <p className="text-xs text-muted-foreground mt-0.5">
+                    {stlData.supports.needsSupport &&
+                    <p className="text-xs text-muted-foreground mt-0.5">
                         %{stlData.supports.overhangRatio} overhang · {stlData.supports.overhangCount} yüzey
                         · {stlData.supports.supportAreaCm2} cm²
                       </p>
-                    )}
+                    }
                   </div>
                 </div>
 
@@ -300,7 +300,7 @@ export default function STLQuote() {
                 </div>
               </div>
             </Card>
-          )}
+            }
 
           {/* Options */}
           <Card className="p-6 border-border/50">
@@ -314,19 +314,19 @@ export default function STLQuote() {
               <div>
                 <label className="text-sm font-medium mb-2.5 block">Malzeme</label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {Object.entries(materials).map(([key, val]) => (
+                  {Object.entries(materials).map(([key, val]) =>
                     <button
                       key={key}
                       onClick={() => handleMaterialChange(key)}
                       className={`p-3 rounded-xl border text-left transition-all duration-200 ${
-                        material === key ? 'border-primary bg-primary/10' : 'border-border/50 hover:border-primary/30'
-                      }`}
-                    >
+                      material === key ? 'border-primary bg-primary/10' : 'border-border/50 hover:border-primary/30'}`
+                      }>
+                      
                       <p className="text-sm font-medium">{val.name}</p>
                       <p className="text-xs text-muted-foreground">{val.desc}</p>
                       <p className="text-xs text-primary mt-1">₺{val.gramCost}/g</p>
                     </button>
-                  ))}
+                    )}
                 </div>
               </div>
 
@@ -337,18 +337,18 @@ export default function STLQuote() {
                   <span className="text-muted-foreground font-normal ml-2 text-xs">(sağlamlık)</span>
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {infillOptions.map((opt) => (
+                  {infillOptions.map((opt) =>
                     <button
                       key={opt.value}
                       onClick={() => handleInfillChange(opt.value)}
                       className={`p-3 rounded-xl border text-left transition-all duration-200 ${
-                        infill === opt.value ? 'border-accent bg-accent/10' : 'border-border/50 hover:border-accent/30'
-                      }`}
-                    >
+                      infill === opt.value ? 'border-accent bg-accent/10' : 'border-border/50 hover:border-accent/30'}`
+                      }>
+                      
                       <p className={`text-sm font-semibold ${infill === opt.value ? 'text-accent' : ''}`}>%{opt.value}</p>
                       <p className="text-xs text-muted-foreground leading-tight mt-0.5">{opt.label.split('–')[1].trim()}</p>
                     </button>
-                  ))}
+                    )}
                 </div>
               </div>
 
@@ -361,29 +361,29 @@ export default function STLQuote() {
                 </label>
                 <div className="flex items-center gap-4">
                   <Slider
-                    value={[sizeCm]}
-                    onValueChange={(v) => handleSizeChange(v[0])}
-                    min={1}
-                    max={30}
-                    step={1}
-                    className="flex-1"
-                  />
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <Input
-                      type="number"
+                      value={[sizeCm]}
+                      onValueChange={(v) => handleSizeChange(v[0])}
                       min={1}
                       max={30}
-                      value={sizeCm}
-                      onChange={(e) => handleSizeChange(e.target.value)}
-                      className="w-16 text-center bg-background"
-                    />
+                      step={1}
+                      className="flex-1" />
+                    
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Input
+                        type="number"
+                        min={1}
+                        max={30}
+                        value={sizeCm}
+                        onChange={(e) => handleSizeChange(e.target.value)}
+                        className="w-16 text-center bg-background" />
+                      
                     <span className="text-sm text-muted-foreground">cm</span>
                   </div>
                 </div>
               </div>
 
               {/* Support Type */}
-              {stlData && stlData.supports.needsSupport && (
+              {stlData && stlData.supports.needsSupport &&
                 <div>
                   <label className="text-sm font-medium mb-2.5 block flex items-center gap-2">
                     Destek Tipi
@@ -392,22 +392,22 @@ export default function STLQuote() {
                     </span>
                   </label>
                   <div className="grid grid-cols-3 gap-2">
-                    {supportOptions.map((opt) => (
-                      <button
-                        key={opt.value}
-                        onClick={() => handleSupportTypeChange(opt.value)}
-                        className={`p-3 rounded-xl border text-left transition-all duration-200 ${
-                          supportType === opt.value ? 'border-yellow-500/60 bg-yellow-500/10' : 'border-border/50 hover:border-yellow-500/30'
-                        }`}
-                      >
+                    {supportOptions.map((opt) =>
+                    <button
+                      key={opt.value}
+                      onClick={() => handleSupportTypeChange(opt.value)}
+                      className={`p-3 rounded-xl border text-left transition-all duration-200 ${
+                      supportType === opt.value ? 'border-yellow-500/60 bg-yellow-500/10' : 'border-border/50 hover:border-yellow-500/30'}`
+                      }>
+                      
                         <p className="text-base mb-0.5">{opt.icon}</p>
                         <p className={`text-xs font-semibold ${supportType === opt.value ? 'text-yellow-300' : ''}`}>{opt.label}</p>
                         <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{opt.desc}</p>
                       </button>
-                    ))}
+                    )}
                   </div>
                 </div>
-              )}
+                }
 
               {/* Color */}
               <div>
@@ -417,9 +417,9 @@ export default function STLQuote() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {colors.map(c => (
+                    {colors.map((c) =>
                       <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-                    ))}
+                      )}
                   </SelectContent>
                 </Select>
               </div>
@@ -431,7 +431,7 @@ export default function STLQuote() {
         <div className="lg:col-span-2">
           <div className="sticky top-24">
             <AnimatePresence mode="wait">
-              {price ? (
+              {price ?
                 <motion.div key="price" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
                   <Card className="p-6 border-primary/20 bg-gradient-to-b from-primary/5 to-transparent">
                     <h2 className="font-heading font-semibold mb-5">Fiyat Teklifi</h2>
@@ -444,14 +444,14 @@ export default function STLQuote() {
                         <span className="text-muted-foreground">Plastik Hacmi</span>
                         <span className="font-medium">{price.totalPlasticCm3} cm³</span>
                       </div>
-                      {price.supportVolCm3 > 0 && (
-                        <div className="flex justify-between text-sm">
+                      {price.supportVolCm3 > 0 &&
+                      <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground flex items-center gap-1">
                             <AlertTriangle className="w-3 h-3 text-yellow-400" /> Destek Materyali
                           </span>
                           <span className="text-yellow-400 font-medium">+{price.supportVolCm3} cm³</span>
                         </div>
-                      )}
+                      }
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Tahmini Gramaj</span>
                         <span className="font-medium font-bold text-foreground">{price.gram} g</span>
@@ -485,11 +485,11 @@ export default function STLQuote() {
                     </div>
 
                     <Button className="w-full gap-2 h-11" onClick={handleAddToCart} disabled={addedToCart}>
-                      {addedToCart ? (
-                        <><CheckCircle className="w-4 h-4" /> Sepete Eklendi</>
-                      ) : (
-                        <><ShoppingCart className="w-4 h-4" /> Sepete Ekle</>
-                      )}
+                      {addedToCart ?
+                      <><CheckCircle className="w-4 h-4" /> Sepete Eklendi</> :
+
+                      <><ShoppingCart className="w-4 h-4" /> Sepete Ekle</>
+                      }
                     </Button>
 
                     <div className="flex items-start gap-2 mt-4 p-3 rounded-lg bg-muted/50">
@@ -499,8 +499,8 @@ export default function STLQuote() {
                       </p>
                     </div>
                   </Card>
-                </motion.div>
-              ) : (
+                </motion.div> :
+
                 <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                   <Card className="p-6 border-border/50">
                     <div className="text-center py-8">
@@ -511,12 +511,12 @@ export default function STLQuote() {
                     </div>
                   </Card>
                 </motion.div>
-              )}
+                }
             </AnimatePresence>
           </div>
         </div>
       </div>
     </div>
-    </div>
-  );
+    </div>);
+
 }
