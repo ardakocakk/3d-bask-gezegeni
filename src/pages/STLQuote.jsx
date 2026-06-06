@@ -189,7 +189,7 @@ export default function STLQuote() {
       }}>
       
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="mb-10 bg-[hsl(var(--card))] rounded-[10px]">
+        <div className="mb-10">
           <h1 className="font-heading text-3xl sm:text-4xl font-bold mb-2 text-[hsl(var(--foreground))]">STL Dosyası Yükle</h1>
           <p className="text-muted-foreground">STL dosyanızı yükleyin, anında fiyat teklifi alın</p>
         </div>
