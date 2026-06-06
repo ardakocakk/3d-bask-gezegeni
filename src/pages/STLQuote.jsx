@@ -107,6 +107,8 @@ export default function STLQuote() {
   const [price, setPrice] = useState(null);
   const [addedToCart, setAddedToCart] = useState(false);
 
+  const bgImage = 'https://media.base44.com/images/public/69faefe28e4303a7ca845f3d/e757ce58b_mythical_Titan_Atlas_as_a_classical_statue_In_this_version_Atlas_stands_with_even_more_power_supporting_an_even_lar.jpg';
+
   const recalculate = (data, mat, inf, cm, suppType) => {
     if (!data) return;
     const infillOpt = infillOptions.find(o => o.value === inf);
@@ -179,11 +181,18 @@ export default function STLQuote() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <div className="mb-10">
-        <h1 className="font-heading text-3xl sm:text-4xl font-bold mb-2">STL Dosyası Yükle</h1>
-        <p className="text-muted-foreground">STL dosyanızı yükleyin, anında fiyat teklifi alın</p>
-      </div>
+    <div 
+      className="min-h-screen bg-cover bg-center bg-fixed"
+      style={{
+        backgroundImage: `linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.88) 50%, rgba(240,240,240,0.9) 100%), url('${bgImage}')`,
+        backgroundAttachment: 'fixed'
+      }}
+    >
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="mb-10">
+          <h1 className="font-heading text-3xl sm:text-4xl font-bold mb-2">STL Dosyası Yükle</h1>
+          <p className="text-muted-foreground">STL dosyanızı yükleyin, anında fiyat teklifi alın</p>
+        </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
         <div className="lg:col-span-3 space-y-6">
@@ -507,6 +516,7 @@ export default function STLQuote() {
           </div>
         </div>
       </div>
+    </div>
     </div>
   );
 }
